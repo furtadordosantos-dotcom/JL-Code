@@ -7,6 +7,34 @@ const api = async (url, options = {}) => {
 const money = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 document.querySelectorAll('.nav-toggle').forEach((button) => button.addEventListener('click', () => button.nextElementSibling.classList.toggle('open')));
 document.querySelectorAll('#logout-link').forEach((link) => link.addEventListener('click', async (event) => { event.preventDefault(); await api('/api/auth/logout', { method: 'POST' }); location.href = 'index.html'; }));
+async function loadNavigationUser() {
+  const navigation = document.querySelector('.nav-links');
+  if (!navigation) return;
+  try {
+    const { user } = await api('/api/auth/me');
+    const name = user.name.split(' ')[0];
+    if (!navigation.querySelector('.user-nav')) {
+      const greeting = document.createElement('span');
+      greeting.className = 'user-nav';
+      greeting.textContent = `Olá, ${name}`;
+      greeting.style.cssText = 'display:inline-flex;align-items:center;padding:8px 11px;border:1px solid #2b5a84;border-radius:999px;background:#0b213b;color:#dceeff;font-size:.85rem;white-space:nowrap';
+      navigation.prepend(greeting);
+    }
+    const loginLink = navigation.querySelector('a[href="login.html"]');
+    const registerLink = navigation.querySelector('a[href="cadastro.html"]');
+    if (loginLink) { loginLink.href = 'aluno.html'; loginLink.textContent = 'Minha área'; }
+    if (registerLink) {
+      registerLink.href = '#sair';
+      registerLink.textContent = 'Sair';
+      registerLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await api('/api/auth/logout', { method: 'POST' });
+        location.href = 'index.html';
+      }, { once: true });
+    }
+  } catch { /* visitante permanece com os links públicos */ }
+}
+loadNavigationUser();
 
 const feedback = (element, message, type = 'error') => { if (element) { element.textContent = message; element.className = `form-feedback ${type}`; } };
 const loginForm = document.querySelector('#login-form');
