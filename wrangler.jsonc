@@ -1,1 +1,17 @@
-{"$schema":"./node_modules/wrangler/config-schema.json","name":"jl-code","compatibility_date":"2026-08-16","pages_build_output_dir":"./dist","d1_databases":[{"binding":"DB","database_name":"jlcode-production","database_id":"39561b14-d808-4417-a267-71970de87699","migrations_dir":"./migrations"}]}
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "jlcode",
+  "compatibility_date": "2026-08-16",
+  "pages_build_output_dir": "./dist",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jlcode-production",
+      "database_id": "39561b14-d808-4417-a267-71970de87699",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  }
+}
