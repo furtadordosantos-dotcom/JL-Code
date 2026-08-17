@@ -1,9 +1,1 @@
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "jl-code",
-  "compatibility_date": "2026-08-16",
-  "pages_build_output_dir": "./dist",
-  "d1_databases": [{ "binding": "DB", "database_name": "jl-code-production", "database_id": "COLOQUE_O_ID_DO_D1", "migrations_dir": "./migrations" }],
-  "r2_buckets": [{ "binding": "APOSTILAS", "bucket_name": "jl-code-apostilas" }],
-  "secrets": { "required": ["JWT_SECRET", "RESEND_API_KEY", "EMAIL_FROM"] }
-}
+{"$schema":"./node_modules/wrangler/config-schema.json","name":"jl-code","compatibility_date":"2026-08-16","pages_build_output_dir":"./dist","d1_databases":[{"binding":"DB","database_name":"jlcode-production","database_id":"39561b14-d808-4417-a267-71970de87699","migrations_dir":"./migrations"}]}
