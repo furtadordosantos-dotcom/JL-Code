@@ -19,10 +19,35 @@ async function requireUser(context) { const id=await session(context.request,con
 async function createVerification(env,u,origin) { await env.DB.prepare('DELETE FROM email_verifications WHERE user_id=? AND used_at IS NULL').bind(u.id).run(); const token=crypto.randomUUID()+crypto.randomUUID(); await env.DB.prepare('INSERT INTO email_verifications (user_id,token_hash,expires_at) VALUES (?,?,?)').bind(u.id,await sha(token),new Date(Date.now()+86400000).toISOString()).run(); await mail(env,u.email,'Confirme seu cadastro — JL Code',`<p>Olá, ${escapeHtml(u.name)}.</p><p>Para ativar sua conta no JL Code, confirme seu e-mail:</p><p><a href="${origin}/api/auth/verify-email?token=${encodeURIComponent(token)}">CONFIRMAR MEU E-MAIL</a></p><p>O link expira em 24 horas.</p>`); }
 function topic(message) { const text=message.toLowerCase(); if(/\b(css|flexbox|grid|stylesheet|estilo)/.test(text)) return 'CSS'; if(/\b(javascript|js\b|dom|array|função|funcao|variável|variavel)/.test(text)) return 'JAVASCRIPT'; return 'HTML'; }
 
+async function createPasswordReset(env,u,origin) {
+  await env.DB.prepare('DELETE FROM password_reset_tokens WHERE user_id=? AND used_at IS NULL').bind(u.id).run();
+  const token=crypto.randomUUID()+crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO password_reset_tokens (user_id,token_hash,expires_at) VALUES (?,?,?)').bind(u.id,await sha(token),new Date(Date.now()+3600000).toISOString()).run();
+  await mail(env,u.email,'Redefina sua senha — JL Code',`<p>Olá, ${escapeHtml(u.name)}.</p><p>Recebemos um pedido para redefinir a senha da sua conta JL Code.</p><p><a href="${origin}/redefinir-senha.html?token=${encodeURIComponent(token)}">REDEFINIR MINHA SENHA</a></p><p>Este link expira em uma hora e pode ser usado uma única vez. Se você não fez esse pedido, ignore este e-mail.</p>`);
+}
+
 export async function onRequest(context) {
   const { request, env } = context; const url=new URL(request.url); const path=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean); const method=request.method; const body=method==='GET'||method==='HEAD'?{}:await request.json().catch(()=>({}));
   const auth=async()=>{ const u=await requireUser(context); return u || json({error:'Faça login para continuar.'},401); };
   try {
+    if(method==='POST'&&path.join('/')==='auth/forgot-password') {
+      const email=String(body.email||'').trim().toLowerCase();
+      if(!/^\S+@\S+\.\S+$/.test(email)) return json({error:'Informe um e-mail válido.'},400);
+      const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).first();
+      if(u) await createPasswordReset(env,u,env.APP_URL||url.origin);
+      return json({message:'Se este e-mail estiver cadastrado, você receberá um link para redefinir a senha.'});
+    }
+    if(method==='POST'&&path.join('/')==='auth/reset-password') {
+      const token=String(body.token||''), password=String(body.password||'');
+      if(!token||password.length<8||password!==body.confirmPassword) return json({error:'Use uma senha de pelo menos 8 caracteres e confirme-a corretamente.'},400);
+      const reset=await env.DB.prepare('SELECT * FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?').bind(await sha(token),now()).first();
+      if(!reset) return json({error:'Este link é inválido, já foi usado ou expirou.'},400);
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET password_hash=? WHERE id=?').bind(await bcrypt.hash(password,12),reset.user_id),
+        env.DB.prepare('UPDATE password_reset_tokens SET used_at=? WHERE id=?').bind(now(),reset.id)
+      ]);
+      return json({message:'Senha alterada com sucesso. Entre usando sua nova senha.'});
+    }
     if(method==='POST'&&path.join('/')==='auth/register') { const name=String(body.name||'').trim(), email=String(body.email||'').trim().toLowerCase(), password=String(body.password||''); if(!name||!/^\S+@\S+\.\S+$/.test(email)||password.length<8||password!==body.confirmPassword) return json({error:'Revise nome, e-mail e senha (mínimo de 8 caracteres).'},400); if(await env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first()) return json({error:'Este e-mail já está cadastrado.'},409); const result=await env.DB.prepare('INSERT INTO users (name,email,password_hash) VALUES (?,?,?)').bind(name,email,await bcrypt.hash(password,12)).run(); const u=await user(env,result.meta.last_row_id); try { await createVerification(env,u,env.APP_URL||url.origin); } catch(error) { return json({error:`Conta criada, mas o e-mail não pôde ser enviado: ${error.message}`},502); } return json({message:'Cadastro criado. Confirme seu e-mail antes de entrar.'},201); }
     if(method==='GET'&&path.join('/')==='auth/verify-email') { const row=await env.DB.prepare('SELECT * FROM email_verifications WHERE token_hash=? AND used_at IS NULL AND expires_at>?').bind(await sha(url.searchParams.get('token')||''),now()).first(); if(!row) return new Response('Link inválido ou expirado.',{status:400}); await env.DB.prepare('UPDATE email_verifications SET used_at=? WHERE id=?').bind(now(),row.id).run(); return Response.redirect(`${url.origin}/login.html?verified=1`,302); }
     if(method==='POST'&&path.join('/')==='auth/resend-verification') { const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(String(body.email||'').trim().toLowerCase()).first(); if(!u) return json({message:'Se necessário, enviamos um novo e-mail de confirmação.'}); const verified=await env.DB.prepare('SELECT id FROM email_verifications WHERE user_id=? AND used_at IS NOT NULL').bind(u.id).first(); if(verified) return json({message:'Este e-mail já foi confirmado. Você já pode entrar.'}); await createVerification(env,u,env.APP_URL||url.origin); return json({message:'E-mail de confirmação reenviado. Confira a caixa de entrada e o spam.'}); }
