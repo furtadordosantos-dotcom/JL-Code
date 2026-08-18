@@ -1,7 +1,14 @@
 const api = async (url, options = {}) => {
-  const response = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
-  const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Não foi possível concluir esta ação.');
+  let response;
+  try {
+    response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Atualize a página e tente novamente.');
+  }
+  const raw = response.status === 204 ? '' : await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { /* resposta de infraestrutura sem JSON */ }
+  if (!response.ok) throw new Error(data.error || `O servidor não respondeu corretamente (erro ${response.status}). Tente novamente em instantes.`);
   return data;
 };
 const money = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
@@ -19,6 +26,16 @@ async function loadNavigationUser() {
       greeting.textContent = `Olá, ${name}`;
       greeting.style.cssText = 'display:inline-flex;align-items:center;padding:8px 11px;border:1px solid #2b5a84;border-radius:999px;background:#0b213b;color:#dceeff;font-size:.85rem;white-space:nowrap';
       navigation.prepend(greeting);
+    }
+    if (!navigation.querySelector('[href="apostilas.html"]')) {
+      const apostilas = document.createElement('a');
+      apostilas.href = 'apostilas.html';
+      apostilas.textContent = 'Apostilas';
+      const exercicios = document.createElement('a');
+      exercicios.href = 'exercicios.html';
+      exercicios.textContent = 'Exercícios';
+      navigation.prepend(exercicios);
+      navigation.prepend(apostilas);
     }
     const loginLink = navigation.querySelector('a[href="login.html"]');
     const registerLink = navigation.querySelector('a[href="cadastro.html"]');
@@ -40,9 +57,7 @@ const feedback = (element, message, type = 'error') => { if (element) { element.
 const loginForm = document.querySelector('#login-form');
 if (loginForm) loginForm.addEventListener('submit', async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(loginForm)); const area = document.querySelector('#form-feedback'); feedback(area, 'Entrando…', ''); try { await api('/api/auth/login', { method: 'POST', body: JSON.stringify(data) }); location.href = 'aluno.html'; } catch (error) { feedback(area, error.message); } });
 const registerForm = document.querySelector('#register-form');
-if (registerForm) registerForm.addEventListener('submit', async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(registerForm)); const area = document.querySelector('#form-feedback'); if (data.password !== data.confirmPassword) return feedback(area, 'As senhas não coincidem.'); feedback(area, 'Criando sua conta…', ''); try { await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }); location.href = 'planos.html'; } catch (error) { feedback(area, error.message); } });
-const forgot = document.querySelector('#forgot-password');
-if (forgot) forgot.addEventListener('click', () => { location.href = 'esqueci-senha.html'; });
+if (registerForm) registerForm.addEventListener('submit', async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(registerForm)); const area = document.querySelector('#form-feedback'); if (data.password !== data.confirmPassword) return feedback(area, 'As senhas não coincidem.'); feedback(area, 'Criando sua conta…', ''); try { const result=await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }); feedback(area,result.message,'success'); setTimeout(()=>{ location.href='login.html'; },1200); } catch (error) { feedback(area, error.message); } });
 const forgotPasswordForm = document.querySelector('#forgot-password-form');
 if (forgotPasswordForm) forgotPasswordForm.addEventListener('submit', async (event) => { event.preventDefault(); const area = document.querySelector('#form-feedback'); feedback(area, 'Enviando link seguro…', ''); try { const data = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(forgotPasswordForm))) }); feedback(area, data.message, 'success'); } catch (error) { feedback(area, error.message); } });
 const resetPasswordForm = document.querySelector('#reset-password-form');
@@ -74,6 +89,30 @@ loadStudent();
 
 async function loadApostilas(){const list=document.querySelector('#apostilas-list');if(!list)return;try{const {apostilas}=await api('/api/apostilas');list.innerHTML=apostilas.map(a=>`<article class="student-course ${a.allowed?'':'locked'}"><span class="tag">${a.course} · ${a.required_plan}</span><h3>${a.title}</h3><p>${a.description}</p><p>Progresso: ${a.progress_percent}%</p>${a.allowed?`<a class="button button-small" href="visualizar-apostila.html?slug=${a.slug}">${a.progress_percent?'Continuar estudando':'Estudar agora'}</a>`:'<p>Conteúdo bloqueado pelo plano.</p>'}</article>`).join('')}catch{location.href='login.html'}}
 loadApostilas();
+
+const escapeCode = (value) => String(value).replace(/[&<>]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[char]));
+async function loadExercises() {
+  const list = document.querySelector('#exercises-list');
+  if (!list) return;
+  try {
+    const { exercises } = await api('/api/exercises');
+    list.innerHTML = exercises.map((exercise, index) => {
+      if (!exercise.allowed) return `<article class="exercise-card locked"><span class="tag">${exercise.technology} · ${exercise.requiredPlan}</span><h2>${exercise.title}</h2><p>${exercise.requiredPlan === 'PRO' ? 'Disponível no Plano Pro.' : 'Assine um plano para liberar este exercício.'}</p></article>`;
+      return `<article class="exercise-card"><span class="tag">${exercise.technology} · ${exercise.level}</span><h2>${index + 1}. ${exercise.title}</h2><p>${exercise.description}</p><div class="exercise-goal"><strong>Seu desafio</strong><span>${exercise.goal}</span></div><label class="exercise-editor-label" for="exercise-code-${exercise.id}">Escreva seu código</label><textarea class="exercise-editor" id="exercise-code-${exercise.id}" spellcheck="false">${escapeCode(exercise.starterCode)}</textarea><div class="exercise-actions"><button class="button button-small" type="button" data-run-exercise="${exercise.id}">Ver resultado</button><span class="exercise-status" id="exercise-status-${exercise.id}">Faça uma alteração e teste.</span></div><iframe title="Resultado do exercício ${index + 1}" sandbox="allow-scripts" class="exercise-preview" id="exercise-preview-${exercise.id}"></iframe></article>`;
+    }).join('');
+    document.querySelectorAll('[data-run-exercise]').forEach((button) => button.addEventListener('click', () => {
+      const id = button.dataset.runExercise;
+      const editor = document.querySelector(`#exercise-code-${id}`);
+      const preview = document.querySelector(`#exercise-preview-${id}`);
+      const status = document.querySelector(`#exercise-status-${id}`);
+      preview.srcdoc = editor.value;
+      status.textContent = 'Resultado atualizado. Continue praticando!';
+    }));
+  } catch (error) {
+    list.innerHTML = `<p class="form-feedback error">${error.message}</p>`;
+  }
+}
+loadExercises();
 
 function addMessage(content, role, extra = '') { const messages = document.querySelector('#chat-messages'); if (!messages) return null; const item = document.createElement('div'); item.className = `message ${role} ${extra}`; item.textContent = content; messages.append(item); messages.scrollTop = messages.scrollHeight; return item; }
 async function loadChat() { const status = document.querySelector('#ai-access-status'); if (!status) return; try { const { user } = await api('/api/auth/me'); if (user.paymentStatus !== 'CONFIRMED') { status.textContent = 'Acesso bloqueado: confirme um pagamento para usar a IA.'; return; } status.textContent = `Acesso liberado: ${user.allowedTechnologies.join(', ')}.`; const { messages } = await api('/api/ai/history'); const box = document.querySelector('#chat-messages'); box.innerHTML = ''; messages.forEach((item) => { addMessage(item.message, 'user'); addMessage(item.response, 'assistant'); }); if (!messages.length) addMessage('Olá! Sou a Gabriela. Em que posso ajudar hoje?', 'assistant'); } catch { status.textContent = 'Entre na sua conta para verificar seu acesso.'; } }
