@@ -95,7 +95,11 @@ async function loadExercises() {
   const list = document.querySelector('#exercises-list');
   if (!list) return;
   try {
-    const { exercises } = await api('/api/exercises');
+    const { exercises, proAccess } = await api('/api/exercises');
+    if (!proAccess) {
+      list.innerHTML = '<article class="exercise-card locked"><span class="tag">RECURSO PRO</span><h2>Exercícios interativos exclusivos do Plano Pro</h2><p>O Plano Beta inclui a apostila de HTML para você praticar no seu próprio computador. Assine o Plano Pro para desbloquear todos os exercícios de HTML, CSS e JavaScript dentro da JL Code.</p><a class="button button-small" href="planos.html">Conhecer Plano Pro</a></article>';
+      return;
+    }
     list.innerHTML = exercises.map((exercise, index) => {
       if (!exercise.allowed) return `<article class="exercise-card locked"><span class="tag">${exercise.technology} · ${exercise.requiredPlan}</span><h2>${exercise.title}</h2><p>${exercise.requiredPlan === 'PRO' ? 'Disponível no Plano Pro.' : 'Assine um plano para liberar este exercício.'}</p></article>`;
       return `<article class="exercise-card"><span class="tag">${exercise.technology} · ${exercise.level}</span><h2>${index + 1}. ${exercise.title}</h2><p>${exercise.description}</p><div class="exercise-goal"><strong>Seu desafio</strong><span>${exercise.goal}</span></div><label class="exercise-editor-label" for="exercise-code-${exercise.id}">Escreva seu código</label><textarea class="exercise-editor" id="exercise-code-${exercise.id}" spellcheck="false">${escapeCode(exercise.starterCode)}</textarea><div class="exercise-actions"><button class="button button-small" type="button" data-run-exercise="${exercise.id}">Ver resultado</button><span class="exercise-status" id="exercise-status-${exercise.id}">Faça uma alteração e teste.</span></div><iframe title="Resultado do exercício ${index + 1}" sandbox="allow-scripts" class="exercise-preview" id="exercise-preview-${exercise.id}"></iframe></article>`;
