@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 const root = resolve('.');
 const output = resolve('dist');
-const publicFiles = ['index.html','login.html','cadastro.html','planos.html','aluno.html','apostilas.html','exercicios.html','ia-gabriela.html','visualizar-apostila.html','script.js','style.css','exercicios.css'];
+const publicFiles = ['index.html','login.html','cadastro.html','planos.html','pagamento-aprovado.html','aluno.html','apostilas.html','exercicios.html','ia-gabriela.html','visualizar-apostila.html','script.js','style.css','exercicios.css'];
 const imageExtensions = /\.(png|jpe?g|webp|svg|ico)$/i;
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });

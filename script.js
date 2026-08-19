@@ -74,15 +74,54 @@ if (resendVerification) resendVerification.addEventListener('click', async () =>
   } catch (error) { feedback(area, error.message); }
 });
 
-let selectedPlan = null; let lastPaymentId = null;
+let selectedPlan = null;
 const plans = { BETA: { name: 'Plano Beta', price: 12990 }, PRO: { name: 'Plano Pro', price: 19990 } };
-function selectPlan(plan) { selectedPlan = plan; const item = plans[plan]; document.querySelector('#pix-plan').textContent = item.name; document.querySelector('#card-plan').textContent = item.name; document.querySelector('#pix-value').textContent = money(item.price); document.querySelector('#card-value').textContent = money(item.price); document.querySelector('#payment-message').textContent = `${item.name} selecionado. Escolha Pix ou cartão para registrar seu pagamento.`; document.querySelector('#pagamento').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function selectPlan(plan) {
+  selectedPlan = plan;
+  const item = plans[plan];
+  const planLabel = document.querySelector('#checkout-plan');
+  const valueLabel = document.querySelector('#checkout-value');
+  if (planLabel) planLabel.textContent = item.name;
+  if (valueLabel) valueLabel.textContent = money(item.price);
+  const message = document.querySelector('#payment-message');
+  if (message) message.textContent = `${item.name} selecionado. Você poderá escolher Pix ou cartão no checkout seguro.`;
+  document.querySelector('#pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 document.querySelectorAll('.select-plan').forEach((button) => button.addEventListener('click', () => selectPlan(button.dataset.plan)));
-const copyPix = document.querySelector('#copy-pix');
-if (copyPix) copyPix.addEventListener('click', async () => { const key = document.querySelector('#pix-key').textContent.trim(); const notice = document.querySelector('#payment-notice'); try { await navigator.clipboard.writeText(key); notice.textContent = 'Chave Pix copiada com sucesso.'; notice.className = 'payment-notice success'; } catch { notice.textContent = 'Não foi possível copiar automaticamente. Verifique a permissão do navegador.'; notice.className = 'payment-notice error'; } });
-async function createPayment(method) { const notice = document.querySelector('#payment-notice'); if (!selectedPlan) { notice.textContent = 'Escolha um plano antes de continuar.'; notice.className = 'payment-notice error'; return; } try { const result = await api('/api/payments', { method: 'POST', body: JSON.stringify({ plan: selectedPlan, method }) }); lastPaymentId = result.transactionId; notice.textContent = `${result.message} Código: ${result.transactionId}`; notice.className = 'payment-notice success'; } catch (error) { notice.textContent = error.message.includes('login') ? 'Faça login ou crie uma conta antes de assinar.' : error.message; notice.className = 'payment-notice error'; } }
-if (copyPix) { const pixCard = copyPix.closest('.payment-card'); const payButton = document.createElement('button'); payButton.type = 'button'; payButton.className = 'button'; payButton.textContent = 'Registrar pagamento Pix'; payButton.addEventListener('click', () => createPayment('PIX')); pixCard.append(payButton); }
-const cardForm = document.querySelector('#card-form'); if (cardForm) cardForm.addEventListener('submit', (event) => { event.preventDefault(); createPayment('CARD'); });
+const startCheckout = document.querySelector('#start-checkout');
+if (startCheckout) startCheckout.addEventListener('click', async () => {
+  const notice = document.querySelector('#payment-notice');
+  if (!selectedPlan) { notice.textContent = 'Escolha um plano antes de continuar.'; notice.className = 'payment-notice error'; return; }
+  startCheckout.disabled = true;
+  notice.textContent = 'Criando checkout seguro…'; notice.className = 'payment-notice';
+  try {
+    const result = await api('/api/payments/infinitepay/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlan }) });
+    location.assign(result.checkoutUrl);
+  } catch (error) {
+    notice.textContent = error.message.includes('login') ? 'Faça login ou crie uma conta antes de assinar.' : error.message;
+    notice.className = 'payment-notice error'; startCheckout.disabled = false;
+  }
+});
+
+async function loadPaymentResult() {
+  const title = document.querySelector('#payment-result-title');
+  if (!title) return;
+  const feedback = document.querySelector('#payment-result-feedback');
+  const message = document.querySelector('#payment-result-message');
+  const action = document.querySelector('#payment-result-action');
+  const params = new URLSearchParams(location.search);
+  const orderNsu = params.get('order_nsu');
+  if (!orderNsu) { title.textContent = 'Pagamento não identificado'; message.textContent = 'Volte aos planos e inicie um novo checkout seguro.'; return; }
+  try {
+    if (params.get('transaction_nsu') && (params.get('slug') || params.get('invoice_slug'))) {
+      await api('/api/payments/infinitepay/verify-return', { method: 'POST', body: JSON.stringify({ order_nsu: orderNsu, transaction_nsu: params.get('transaction_nsu'), slug: params.get('slug') || params.get('invoice_slug'), receipt_url: params.get('receipt_url') || '' }) });
+    }
+    const { order } = await api(`/api/payments/infinitepay/status?order_nsu=${encodeURIComponent(orderNsu)}`);
+    if (order.status === 'PAID') { title.textContent = 'Pagamento confirmado!'; message.textContent = `Seu Plano ${order.plan_code === 'BETA' ? 'Beta' : 'Pro'} foi liberado por 15 dias.`; feedback.textContent = 'Seu acesso já está disponível.'; feedback.className = 'form-feedback success'; action.hidden = false; return; }
+    title.textContent = 'Aguardando confirmação'; message.textContent = 'A InfinitePay ainda está confirmando o pagamento. Atualize esta página em instantes; o acesso será liberado automaticamente após a confirmação.';
+  } catch (error) { title.textContent = 'Não foi possível confirmar agora'; message.textContent = error.message; }
+}
+loadPaymentResult();
 
 async function loadStudent() { const greeting = document.querySelector('#student-greeting'); if (!greeting) return; try { const { user, accesses } = await api('/api/student'); greeting.textContent = `Olá, ${user.name.split(' ')[0]}!`; document.querySelector('#student-plan').textContent = user.plan === 'FREE' ? 'Sem plano' : `Plano ${user.plan === 'BETA' ? 'Beta' : 'Pro'}`; document.querySelector('#student-status').textContent = user.paymentStatus === 'CONFIRMED' ? 'Acesso liberado' : 'Aguardando pagamento'; const active = new Set(accesses.filter((a) => a.status === 'ACTIVE').map((a) => a.technology)); const container = document.querySelector('#student-courses'); container.innerHTML = ['HTML', 'CSS', 'JAVASCRIPT'].map((technology) => { const unlocked = active.has(technology); return `<article class="student-course ${unlocked ? '' : 'locked'}"><div class="course-icon">${unlocked ? '✓' : '🔒'}</div><h3>${technology === 'JAVASCRIPT' ? 'JavaScript' : technology}</h3><p>${unlocked ? 'Aulas, apostilas, exercícios e projetos disponíveis.' : technology === 'HTML' ? 'Assine um plano para liberar este curso.' : 'Disponível no Plano Pro.'}</p></article>`; }).join(''); } catch { location.href = 'login.html'; } }
 loadStudent();

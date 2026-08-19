@@ -22,13 +22,11 @@
 No painel Cloudflare, em **Workers & Pages > JL Code > Settings > Variables and Secrets**, crie como valores criptografados:
 
 - `JWT_SECRET`: valor longo, aleatório e exclusivo;
-- `RESEND_API_KEY`;
-- `EMAIL_FROM`: remetente de um domínio verificado no Resend;
-- `OPENAI_API_KEY` (quando a IA for ativada);
-- `OPENAI_MODEL`;
+- `BREVO_API_KEY`;
+- `EMAIL_FROM`: remetente validado no Brevo;
 - `APP_URL`: URL HTTPS final do Pages;
-- `PIX_KEY`;
-- `DEV_DEMO_MODE=false`.
+- `INFINITEPAY_HANDLE`: `juliano-lucas-2024`;
+- `INFINITEPAY_API_KEY`: somente se a InfinitePay fornecer uma credencial privada para a conta.
 
 Não coloque nenhum desses valores em HTML, `script.js`, `wrangler.jsonc` ou Git.
 
@@ -40,6 +38,14 @@ Use `npm run build` como comando de build e `dist` como diretório de saída no 
 
 O banco local `data/jlcode.db` não é publicado. Para migrar usuários existentes, exporte seu SQLite para SQL e importe no D1 antes do lançamento. Faça backup antes da importação.
 
-## Pagamento
+## Pagamento — InfinitePay
 
-`confirm-demo` existe apenas para desenvolvimento e fica desligado quando `DEV_DEMO_MODE=false`. Para pagamentos reais, conecte o gateway escolhido a uma Function de webhook que valide a assinatura do provedor antes de confirmar o pagamento.
+O site cria o checkout no backend em `POST /api/payments/infinitepay/checkout`. Os preços oficiais ficam fixos no servidor: Beta `12990` e Pro `19990` centavos. O cliente é direcionado ao checkout da InfinitePay e preenche Pix ou cartão apenas lá.
+
+Configure o webhook da InfinitePay para:
+
+`https://jlcode.pages.dev/api/payments/infinitepay/webhook`
+
+O webhook e a página de retorno não liberam o plano por conta própria. Ambos consultam `payment_check` na InfinitePay, verificam `order_nsu`, valor e transação e só então ativam o plano por 15 dias. O endpoint é idempotente: uma confirmação repetida não duplica a compra nem os acessos.
+
+O Checkout Integrado público atual da InfinitePay usa a InfiniteTag no payload. Caso a InfinitePay habilite uma chave privada para a conta, cadastre-a apenas como secret no Pages; nunca a exponha no frontend.
