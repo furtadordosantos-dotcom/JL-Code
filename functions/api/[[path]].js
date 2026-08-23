@@ -19,6 +19,27 @@ const exerciseCatalog = [
   {id:'js-button',technology:'JAVASCRIPT',requiredPlan:'PRO',level:'Básico',title:'Botão interativo',description:'Faça uma página reagir a um clique.',goal:'Altere o texto do parágrafo quando a pessoa clicar no botão.',starterCode:'<button id="botao">Clique aqui</button>\n<p id="mensagem">Esperando o clique...</p>\n<script>\n  document.querySelector("#botao").addEventListener("click", () => {\n    document.querySelector("#mensagem").textContent = "Você conseguiu!";\n  });\n<\/script>'},
   {id:'js-list',technology:'JAVASCRIPT',requiredPlan:'PRO',level:'Intermediário',title:'Lista de tarefas',description:'Pratique arrays e criação de elementos no DOM.',goal:'Adicione mais uma tarefa ao array e veja-a aparecer na lista.',starterCode:'<ul id="lista"></ul>\n<script>\n  const tarefas = ["Estudar HTML", "Praticar CSS", "Aprender JavaScript"];\n  const lista = document.querySelector("#lista");\n  tarefas.forEach((tarefa) => {\n    const item = document.createElement("li");\n    item.textContent = tarefa;\n    lista.append(item);\n  });\n<\/script>'}
 ];
+const professionalExerciseTracks=[
+['html-accessibility','HTML','Acessibilidade auditável','Projete um formulário de inscrição acessível por teclado, com labels, mensagens de erro e foco previsível.','Crie formulário com campo obrigatório, aria-describedby e uma mensagem de erro que não dependa apenas de cor.'],
+['html-portfolio','HTML','Portfólio semântico','Estruture uma página de portfólio pronta para recrutadores e leitores de tela.','Use header, nav, main, section, article e footer; adicione links de projeto com descrições claras.'],
+['html-seo','HTML','SEO técnico','Modele uma página de artigo com metadados, hierarquia e conteúdo compartilhável.','Inclua title, meta description, imagem com alt e apenas um h1.'],
+['css-dashboard','CSS','Dashboard responsivo','Construa um painel que organize métricas sem quebrar em celular.','Use Grid com áreas, clamp para espaçamento e uma media query mobile-first.'],
+['css-design-system','CSS','Mini design system','Crie tokens reutilizáveis para cores, tipografia, espaçamento e estados.','Declare variáveis CSS e aplique-as em botão, cartão e formulário.'],
+['css-layout','CSS','Layout editorial','Monte uma página editorial combinando Grid, Flexbox e conteúdo fluido.','Crie cabeçalho, coluna de leitura e barra lateral que vire uma coluna no celular.'],
+['css-motion','CSS','Animação responsável','Adicione feedback visual sem prejudicar pessoas sensíveis a movimento.','Crie transição de card e respeite prefers-reduced-motion.'],
+['css-theme','CSS','Tema claro e escuro','Implemente tema consistente usando variáveis e preferência do sistema.','Use prefers-color-scheme e garanta contraste em ambos os temas.'],
+['js-api','JAVASCRIPT','Consumo robusto de API','Busque dados remotos, trate carregamento, erro e sucesso na interface.','Use fetch com try/catch e renderize um estado de carregamento acessível.'],
+['js-state','JAVASCRIPT','Estado de interface','Construa uma lista filtrável sem duplicar elementos ou listeners.','Mantenha estado em objeto e renderize a tela a partir dele.'],
+['js-form','JAVASCRIPT','Validação de formulário','Valide dados no navegador com mensagens úteis antes do envio.','Cheque formato, campos obrigatórios e mostre a mensagem perto do campo.'],
+['js-storage','JAVASCRIPT','Persistência local','Salve preferências de estudo com LocalStorage e restaure ao recarregar.','Crie controle de tema ou progresso com JSON.stringify e JSON.parse.'],
+['js-events','JAVASCRIPT','Delegação de eventos','Implemente uma lista dinâmica sem criar um listener para cada item.','Use um único listener no contêiner e identifique o item clicado.'],
+['js-performance','JAVASCRIPT','Performance de busca','Construa campo de busca com debounce e resultado vazio.','Espere um curto intervalo antes de filtrar e evite renderizações desnecessárias.'],
+['js-security','JAVASCRIPT','Renderização segura','Exiba conteúdo recebido sem usar innerHTML para dados externos.','Crie elementos com createElement e use textContent para dados do usuário.'],
+['js-architecture','JAVASCRIPT','Módulo de componentes','Organize um componente de cartão com funções pequenas e testáveis.','Separe dados, renderização e eventos em funções diferentes.'],
+['js-project-kanban','JAVASCRIPT','Projeto Kanban','Crie quadro com colunas, cartões e persistência local.','Permita adicionar cartão e mover status sem perder dados ao recarregar.'],
+['js-project-catalog','JAVASCRIPT','Projeto catálogo','Crie catálogo com filtro, ordenação e estado vazio.','Use array de objetos, map/filter e mensagens de interface claras.']
+];
+exerciseCatalog.push(...professionalExerciseTracks.map(([id,technology,title,description,goal])=>({id,technology,requiredPlan:'PRO',level:'Profissional',title,description,goal,starterCode:technology==='HTML'?'<main>\n  <h1>Desafio JL Code</h1>\n</main>':technology==='CSS'?'<style>\n  :root { --brand: #1769e0; }\n</style>\n<main class="app">Comece aqui</main>':'<main><h1>Desafio JL Code</h1><div id="app"></div></main>\n<script>\n  const app = document.querySelector("#app");\n<\\/script>'})));
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 const now = () => new Date().toISOString();
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
