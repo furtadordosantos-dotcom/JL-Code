@@ -155,6 +155,12 @@ async function loadFinalExam(){
       const intro=document.createElement('p');intro.textContent='Use esta revisão para estudar antes de uma nova tentativa.';review.append(intro);
       items.forEach((item)=>{const article=document.createElement('article');article.className='exam-review-item';const tag=document.createElement('span');tag.className='tag';tag.textContent=`QUESTÃO ${item.id} · ${item.technology}`;const question=document.createElement('h3');question.textContent=item.question;const selected=document.createElement('p');selected.className='wrong-answer';selected.textContent=`Sua resposta: ${item.selectedOption}`;const correct=document.createElement('p');correct.className='correct-answer';correct.textContent=`Resposta correta: ${item.correctOption}`;article.append(tag,question,selected,correct);review.append(article);});
     }
+    if(state.user?.isAdmin){
+      const testButton=document.createElement('button');
+      testButton.type='button'; testButton.className='button'; testButton.textContent='Finalizar prova de teste (100%)';
+      testButton.addEventListener('click',async()=>{try{testButton.disabled=true;testButton.textContent='Preparando certificado…';const result=await api('/api/final-exam/admin-pass',{method:'POST',body:'{}'});renderReview(result.review||[]);status.textContent='Teste administrativo concluído: 50 de 50 questões corretas — 100%.';panel.hidden=true;const certificateFlow=document.querySelector('#certificate-flow');certificateFlow.hidden=false;certificateFlow.scrollIntoView({behavior:'smooth',block:'center'});}catch(error){status.textContent=error.message;testButton.disabled=false;testButton.textContent='Finalizar prova de teste (100%)';}});
+      status.after(testButton);
+    }
     function renderQuestion(){
       const question=data.questions[current];
       form.replaceChildren();
