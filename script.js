@@ -144,6 +144,17 @@ async function loadFinalExam(){
     let current=0;
     status.textContent='Você cumpriu os requisitos. Responda às 50 questões para concluir.';
     title.textContent='Prova Final — Programação Web Júnior';
+    function renderReview(items){
+      const review=document.querySelector('#exam-review');
+      review.replaceChildren();
+      review.hidden=false;
+      const heading=document.createElement('h2');
+      heading.textContent=items.length?'Revise as questões que você errou':'Revisão da prova';
+      review.append(heading);
+      if(!items.length){const success=document.createElement('p');success.textContent='Excelente: você acertou todas as questões.';review.append(success);return;}
+      const intro=document.createElement('p');intro.textContent='Use esta revisão para estudar antes de uma nova tentativa.';review.append(intro);
+      items.forEach((item)=>{const article=document.createElement('article');article.className='exam-review-item';const tag=document.createElement('span');tag.className='tag';tag.textContent=`QUESTÃO ${item.id} · ${item.technology}`;const question=document.createElement('h3');question.textContent=item.question;const selected=document.createElement('p');selected.className='wrong-answer';selected.textContent=`Sua resposta: ${item.selectedOption}`;const correct=document.createElement('p');correct.className='correct-answer';correct.textContent=`Resposta correta: ${item.correctOption}`;article.append(tag,question,selected,correct);review.append(article);});
+    }
     function renderQuestion(){
       const question=data.questions[current];
       form.replaceChildren();
@@ -174,6 +185,7 @@ async function loadFinalExam(){
       if(answers.size!==data.questions.length){status.textContent='Responda todas as questões antes de finalizar.';return;}
       next.disabled=true; next.textContent='Corrigindo prova…';
       const result=await api('/api/final-exam/submit',{method:'POST',body:JSON.stringify({answers:data.questions.map(q=>answers.get(q.id))})});
+      renderReview(result.review||[]);
       if(result.status==='PASSED'){status.textContent=`Resultado final: ${result.correct} de 50 questões corretas — ${result.percentage}%. Você atingiu a nota necessária para o certificado.`;panel.hidden=true;const certificateFlow=document.querySelector('#certificate-flow');certificateFlow.hidden=false;certificateFlow.scrollIntoView({behavior:'smooth',block:'center'});return;}
       status.textContent=`Resultado final: ${result.correct} de 50 questões corretas — ${result.percentage}%. São necessários 80%. Você pode tentar novamente quando estiver preparado.`;
       panel.hidden=true;
