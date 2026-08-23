@@ -60,17 +60,9 @@ async function key(secret) { return crypto.subtle.importKey('raw', new TextEncod
 async function sessionToken(id, secret) { const header=btoa('{"alg":"HS256","typ":"JWT"}').replaceAll('=',''); const body=btoa(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+604800})).replaceAll('=',''); const data=`${header}.${body}`; return `${data}.${b64(await crypto.subtle.sign('HMAC', await key(secret), new TextEncoder().encode(data)))}`; }
 async function session(request, env) { try { const value=cookie(request,'jlcode_session'); if(!value) return null; const [a,b,s]=value.split('.'); if(!a||!b||!s||!(await crypto.subtle.verify('HMAC',await key(env.JWT_SECRET),ub64(s),new TextEncoder().encode(`${a}.${b}`)))) return null; const payload=JSON.parse(new TextDecoder().decode(ub64(b))); return payload.exp > Date.now()/1000 ? Number(payload.sub) : null; } catch { return null; } }
 const lifetimeProEmails = new Set(['julianolucas004@gmail.com']);
-const revokedTestAccountEmails = new Set(['furtadordosantos@gmail.com']);
 async function user(env,id) {
   let account=await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(id).first();
   if(!account) return account;
-  if(revokedTestAccountEmails.has(String(account.email).toLowerCase()) && (account.plan!=='FREE'||account.payment_status!=='PENDING')) {
-    await env.DB.batch([
-      env.DB.prepare("UPDATE users SET plan='FREE', payment_status='PENDING', plan_started_at=NULL, plan_ends_at=NULL WHERE id=?").bind(account.id),
-      env.DB.prepare("UPDATE accesses SET status='BLOCKED' WHERE user_id=?").bind(account.id)
-    ]);
-    return env.DB.prepare('SELECT * FROM users WHERE id=?').bind(id).first();
-  }
   if(lifetimeProEmails.has(String(account.email).toLowerCase())) {
     if(account.plan!=='PRO'||account.payment_status!=='CONFIRMED'||account.plan_ends_at!==null) {
       await env.DB.batch([
