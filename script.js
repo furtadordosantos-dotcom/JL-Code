@@ -132,6 +132,7 @@ async function loadFinalExam(){
     const state=await api('/api/final-exam/status');
     if(state.certificate){status.innerHTML=`Certificado emitido: <a href="certificado.html">${state.certificate.certificate_code}</a> · <a href="validar-certificado.html?code=${encodeURIComponent(state.certificate.certificate_code)}">validar</a>`;return;}
     if(!state.eligible){status.textContent=`Bloqueada. ${state.daysActive}/90 dias de acesso e ${state.confirmedPayments}/6 pagamentos confirmados.`;return;}
+    if(!state.canAttempt){const updateRetry=()=>{const remaining=Math.max(0,new Date(state.retryAt).getTime()-Date.now());const hours=Math.floor(remaining/3600000);const minutes=Math.floor((remaining%3600000)/60000);const seconds=Math.floor((remaining%60000)/1000);status.textContent=`Você não atingiu 80% na última tentativa. Nova prova liberada em ${hours}h ${minutes}m ${seconds}s.`;};updateRetry();setInterval(updateRetry,1000);return;}
     const data=await api('/api/final-exam/questions');
     const panel=document.querySelector('#exam-panel');
     const form=document.querySelector('#exam-form');
@@ -173,11 +174,13 @@ async function loadFinalExam(){
       if(answers.size!==data.questions.length){status.textContent='Responda todas as questões antes de finalizar.';return;}
       next.disabled=true; next.textContent='Corrigindo prova…';
       const result=await api('/api/final-exam/submit',{method:'POST',body:JSON.stringify({answers:data.questions.map(q=>answers.get(q.id))})});
-      if(result.status==='PASSED'){status.innerHTML=`Aprovado com ${result.percentage}%! <a href="certificado.html">Abrir certificado</a>`;panel.hidden=true;return;}
-      status.textContent=`Resultado: ${result.percentage}%. São necessários 80%. Você pode tentar novamente quando estiver preparado.`;
+      if(result.status==='PASSED'){status.textContent=`Resultado final: ${result.correct} de 50 questões corretas — ${result.percentage}%. Você atingiu a nota necessária para o certificado.`;panel.hidden=true;const certificateFlow=document.querySelector('#certificate-flow');certificateFlow.hidden=false;certificateFlow.scrollIntoView({behavior:'smooth',block:'center'});return;}
+      status.textContent=`Resultado final: ${result.correct} de 50 questões corretas — ${result.percentage}%. São necessários 80%. Você pode tentar novamente quando estiver preparado.`;
       panel.hidden=true;
     });
     panel.hidden=false;
+    const certificateForm=document.querySelector('#certificate-form');
+    if(certificateForm)certificateForm.addEventListener('submit',async(event)=>{event.preventDefault();const fullName=document.querySelector('#certificate-full-name').value.trim();const button=certificateForm.querySelector('button');button.disabled=true;button.textContent='Emitindo certificado…';try{await api('/api/final-exam/certificate',{method:'POST',body:JSON.stringify({fullName})});location.href='certificado.html';}catch(error){status.textContent=error.message;button.disabled=false;button.textContent='Emitir meu certificado';}});
     renderQuestion();
   }catch(e){status.textContent=e.message;}
 }
