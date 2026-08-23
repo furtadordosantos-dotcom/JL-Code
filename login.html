@@ -1,1 +1,33 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar | JL Code</title><link rel="stylesheet" href="style.css"></head><body class="auth-page"><main class="auth-card"><a class="brand" href="index.html"><span>&lt;/&gt;</span>JL Code</a><section id="login-panel"><p class="eyebrow">BEM-VINDO DE VOLTA</p><h1>Entre na sua conta</h1><p>Acesse seus cursos e continue aprendendo.</p><form id="login-form" class="form"><label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required placeholder="Sua senha"></label><div class="auth-actions"><a class="text-link" href="login.html?recuperar=1#recuperar-senha">Esqueci minha senha</a><button class="text-link" type="button" id="resend-verification">Reenviar e-mail de confirmação</button></div><div class="form-feedback" id="form-feedback" role="alert"></div><button class="button" type="submit">Entrar</button></form><p class="auth-switch">Ainda não tem conta? <a href="cadastro.html">Cadastre-se</a></p></section><section id="forgot-password-panel" hidden><p class="eyebrow">RECUPERAR ACESSO</p><h1>Esqueci minha senha</h1><p>Informe seu e-mail. Enviaremos um link seguro para criar uma nova senha.</p><form id="forgot-password-form" class="form"><label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label><div class="form-feedback" id="forgot-feedback" role="alert"></div><button class="button" type="submit">Enviar link de recuperação</button></form><p class="auth-switch"><a href="login.html">Voltar para entrar</a></p></section><section id="reset-password-panel" hidden><p class="eyebrow">NOVA SENHA</p><h1>Crie uma nova senha</h1><p>Use pelo menos 8 caracteres.</p><form id="reset-password-form" class="form"><label>Nova senha<input name="password" type="password" autocomplete="new-password" required minlength="8"></label><label>Confirmar nova senha<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="8"></label><div class="form-feedback" id="reset-feedback" role="alert"></div><button class="button" type="submit">Salvar nova senha</button></form></section></main><script src="script.js"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Entrar | JL Code</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <a class="brand" href="index.html"><span>&lt;/&gt;</span>JL Code</a>
+    <section id="login-panel">
+      <p class="eyebrow">BEM-VINDO DE VOLTA</p>
+      <h1>Entre na sua conta</h1>
+      <p>Acesse seus cursos e continue aprendendo.</p>
+      <form id="login-form" class="form">
+        <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label>
+        <label>Senha<input name="password" type="password" autocomplete="current-password" required placeholder="Sua senha"></label>
+        <div class="auth-actions" aria-label="Opções de acesso">
+          <a class="auth-action-card auth-action-recovery" href="login.html?recuperar=1#recuperar-senha"><span class="auth-action-icon" aria-hidden="true">↻</span><span class="auth-action-copy"><strong>Esqueci minha senha</strong><small>Receber link de recuperação</small></span></a>
+          <button class="auth-action-card auth-action-verification" type="button" id="resend-verification"><span class="auth-action-icon" aria-hidden="true">✉</span><span class="auth-action-copy"><strong>Reenviar e-mail de confirmação</strong><small>Confirmar meu e-mail</small></span></button>
+        </div>
+        <div class="form-feedback" id="form-feedback" role="alert"></div>
+        <button class="button" type="submit">Entrar</button>
+      </form>
+      <p class="auth-switch">Ainda não tem conta? <a href="cadastro.html">Cadastre-se</a></p>
+    </section>
+    <section id="forgot-password-panel" hidden><p class="eyebrow">RECUPERAR ACESSO</p><h1>Esqueci minha senha</h1><p>Informe seu e-mail. Enviaremos um link seguro para criar uma nova senha.</p><form id="forgot-password-form" class="form"><label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label><div class="form-feedback" id="forgot-feedback" role="alert"></div><button class="button" type="submit">Enviar link de recuperação</button></form><p class="auth-switch"><a href="login.html">Voltar para entrar</a></p></section>
+    <section id="reset-password-panel" hidden><p class="eyebrow">NOVA SENHA</p><h1>Crie uma nova senha</h1><p>Use pelo menos 8 caracteres.</p><form id="reset-password-form" class="form"><label>Nova senha<input name="password" type="password" autocomplete="new-password" required minlength="8"></label><label>Confirmar nova senha<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="8"></label><div class="form-feedback" id="reset-feedback" role="alert"></div><button class="button" type="submit">Salvar nova senha</button></form></section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
