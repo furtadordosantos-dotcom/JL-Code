@@ -141,7 +141,9 @@ export async function onRequest(context) {
     if(method==='POST'&&path.join('/')==='payments/infinitepay/checkout') {
       const u=await auth(); if(u instanceof Response)return u;
       const plan=String(body.plan||'').toUpperCase();
+      const paymentMethod=String(body.paymentMethod||'').toUpperCase();
       if(!plans[plan]) return json({error:'Plano inválido.'},400);
+      if(paymentMethod && !['PIX','CARD'].includes(paymentMethod)) return json({error:'Forma de pagamento inválida.'},400);
       if(!infinitePayConfigured(env)) return json({error:'O checkout da InfinitePay ainda não foi configurado.'},503);
       const origin=apiOrigin(env,url), orderNsu=`JL-${crypto.randomUUID()}`;
       await env.DB.prepare('INSERT INTO payment_orders (user_id,plan_code,amount_cents,order_nsu) VALUES (?,?,?,?)').bind(u.id,plan,plans[plan].price,orderNsu).run();

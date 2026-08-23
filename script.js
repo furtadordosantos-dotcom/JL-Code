@@ -88,20 +88,22 @@ function selectPlan(plan) {
   document.querySelector('#pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 document.querySelectorAll('.select-plan').forEach((button) => button.addEventListener('click', () => selectPlan(button.dataset.plan)));
-const startCheckout = document.querySelector('#start-checkout');
-if (startCheckout) startCheckout.addEventListener('click', async () => {
+async function startInfinitePayCheckout(paymentMethod, button) {
   const notice = document.querySelector('#payment-notice');
   if (!selectedPlan) { notice.textContent = 'Escolha um plano antes de continuar.'; notice.className = 'payment-notice error'; return; }
-  startCheckout.disabled = true;
-  notice.textContent = 'Criando checkout seguro…'; notice.className = 'payment-notice';
+  const checkoutButtons = [...document.querySelectorAll('[data-payment-method]')];
+  checkoutButtons.forEach((item) => { item.disabled = true; });
+  const label = paymentMethod === 'PIX' ? 'Pix' : 'cartão';
+  notice.textContent = `Criando checkout seguro para pagamento com ${label}…`; notice.className = 'payment-notice';
   try {
-    const result = await api('/api/payments/infinitepay/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlan }) });
+    const result = await api('/api/payments/infinitepay/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlan, paymentMethod }) });
     location.assign(result.checkoutUrl);
   } catch (error) {
     notice.textContent = error.message.includes('login') ? 'Faça login ou crie uma conta antes de assinar.' : error.message;
-    notice.className = 'payment-notice error'; startCheckout.disabled = false;
+    notice.className = 'payment-notice error'; checkoutButtons.forEach((item) => { item.disabled = false; });
   }
-});
+}
+document.querySelectorAll('[data-payment-method]').forEach((button) => button.addEventListener('click', () => startInfinitePayCheckout(button.dataset.paymentMethod, button)));
 
 async function loadPaymentResult() {
   const title = document.querySelector('#payment-result-title');
