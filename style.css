@@ -12,3 +12,39 @@
 .certificate-document-new .certificate-footer-new{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1.25fr .55fr;align-items:center;gap:12px;min-height:74px;margin:0;padding:0!important;border:0!important;background:transparent!important}.certificate-document-new .certificate-validation{justify-self:center;display:flex;align-items:center;justify-content:center}.certificate-document-new .certificate-badge{display:grid!important;justify-self:end}.certificate-document-new .certificate-signature{justify-self:start;width:100%}@media(max-width:680px){.certificate-document-new .certificate-footer-new{grid-template-columns:1fr 1fr 58px;gap:8px;min-height:64px}.certificate-document-new .certificate-validation div{display:none}.certificate-document-new .certificate-badge{width:48px}.certificate-document-new .certificate-signature{font-size:.82rem}}
 .auth-actions{display:flex;align-items:center;flex-wrap:wrap;column-gap:34px;row-gap:14px;margin:24px 0 8px}.auth-actions .text-link{font-size:.86rem;white-space:nowrap}.auth-actions #resend-verification{padding-left:34px;border-left:1px solid #345578}@media(max-width:480px){.auth-actions{align-items:flex-start;flex-direction:column;gap:14px}.auth-actions #resend-verification{padding-left:0;border-left:0}}
 .reader-mobile-action{margin-top:18px;padding:20px;border:1px solid #35638f;border-radius:14px;background:linear-gradient(135deg,#112b49,#0a182a)}.reader-mobile-action p{margin:0 0 14px;color:#c4d7f1}.reader-mobile-action .button{width:100%}@media(max-width:760px){.reader-page .reader-shell{width:min(100% - 24px,1160px);margin-top:12px;padding:18px 14px}.reader-page .reader-toolbar h1{font-size:1.5rem}.reader-page #apostila-viewer{height:calc(100dvh - 210px);min-height:520px;border-radius:10px}.certificate-page{width:min(100% - 24px,1160px);padding:28px 0 56px}.certificate-page>h1{font-size:clamp(1.8rem,8vw,2.5rem)}.certificate-page #certificate-actions{display:grid;grid-template-columns:1fr;gap:10px}.certificate-page #certificate-actions .button{width:100%;min-height:48px}.certificate-document-new{width:100%;box-shadow:0 0 0 4px #051223,0 0 0 6px #257ac877,0 18px 38px #000b}.certificate-document-new .certificate-footer-new{grid-template-columns:minmax(0,1fr) 66px 48px;gap:6px}.certificate-document-new .certificate-validation div{display:none}.certificate-document-new .certificate-badge{width:44px}.certificate-document-new .certificate-signature{min-width:0}.certificate-document-new .certificate-signature i{font-size:1rem}.certificate-document-new .certificate-signature span,.certificate-document-new .certificate-signature small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.certificate-document-new .certificate-qr{width:62px!important;height:62px!important}.exam-shell{width:min(100% - 24px,1160px);padding:22px 0 56px}.exam-hero{border-radius:20px;padding:28px 20px}.exam-hero h1{font-size:clamp(2.2rem,12vw,3.35rem)}.exam-workspace{padding:20px 14px;border-radius:16px}.exam-question{padding:16px 12px}.exam-question label{padding:12px;font-size:.95rem}.certificate-flow{padding:20px 16px}.certificate-flow input{width:100%}}@media print{.certificate-document-new .certificate-footer-new{padding:0!important;background:transparent!important}}
+/* A exportação do certificado deve conter apenas o documento oficial. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    background: #fff !important;
+  }
+
+  .public-certificate-page .certificate-page {
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .public-certificate-page .certificate-page > .eyebrow,
+  .public-certificate-page .certificate-page > h1,
+  .public-certificate-page #public-certificate-status,
+  .public-certificate-page #public-certificate-actions {
+    display: none !important;
+  }
+
+  .public-certificate-page .certificate-document-new {
+    display: flex !important;
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
