@@ -125,7 +125,62 @@ async function loadPaymentResult() {
 }
 loadPaymentResult();
 
-async function loadFinalExam(){const status=document.querySelector('#exam-status');if(!status)return;try{const state=await api('/api/final-exam/status');if(state.certificate){status.innerHTML=`Certificado emitido: <a href="certificado.html">${state.certificate.certificate_code}</a> · <a href="validar-certificado.html?code=${encodeURIComponent(state.certificate.certificate_code)}">validar</a>`;return}if(!state.eligible){status.textContent=`Bloqueada. ${state.daysActive}/90 dias de acesso e ${state.confirmedPayments}/6 pagamentos confirmados.`;return}const data=await api('/api/final-exam/questions'), panel=document.querySelector('#exam-panel'), form=document.querySelector('#exam-form');status.textContent='Você cumpriu os requisitos. Responda às 50 questões para concluir.';document.querySelector('#exam-title').textContent='Prova Final - Programação Web Júnior';form.innerHTML=data.questions.map(q=>`<fieldset class="exam-question"><legend>${q.id+1}. [${q.technology}] ${q.question}</legend>${q.options.map((o,i)=>`<label><input required type="radio" name="q${q.id}" value="${i}"> ${o}</label>`).join('')}</fieldset>`).join('');panel.hidden=false;form.addEventListener('submit',async e=>{e.preventDefault();const answers=data.questions.map(q=>Number(new FormData(form).get(`q${q.id}`)));const result=await api('/api/final-exam/submit',{method:'POST',body:JSON.stringify({answers})});if(result.status==='PASSED'){status.innerHTML=`Aprovado com ${result.percentage}%! <a href="certificado.html">Abrir certificado</a>`;panel.hidden=true;return}status.textContent=`Resultado: ${result.percentage}%. São necessários 80%. Você pode tentar novamente quando estiver preparado.`;panel.hidden=true})}catch(e){status.textContent=e.message}}
+async function loadFinalExam(){
+  const status=document.querySelector('#exam-status');
+  if(!status)return;
+  try{
+    const state=await api('/api/final-exam/status');
+    if(state.certificate){status.innerHTML=`Certificado emitido: <a href="certificado.html">${state.certificate.certificate_code}</a> · <a href="validar-certificado.html?code=${encodeURIComponent(state.certificate.certificate_code)}">validar</a>`;return;}
+    if(!state.eligible){status.textContent=`Bloqueada. ${state.daysActive}/90 dias de acesso e ${state.confirmedPayments}/6 pagamentos confirmados.`;return;}
+    const data=await api('/api/final-exam/questions');
+    const panel=document.querySelector('#exam-panel');
+    const form=document.querySelector('#exam-form');
+    const title=document.querySelector('#exam-title');
+    const progress=document.querySelector('#exam-progress');
+    const previous=document.querySelector('#exam-previous');
+    const next=document.querySelector('#exam-next');
+    const answers=new Map();
+    let current=0;
+    status.textContent='Você cumpriu os requisitos. Responda às 50 questões para concluir.';
+    title.textContent='Prova Final — Programação Web Júnior';
+    function renderQuestion(){
+      const question=data.questions[current];
+      form.replaceChildren();
+      const fieldset=document.createElement('fieldset');
+      fieldset.className='exam-question';
+      const legend=document.createElement('legend');
+      legend.textContent=`${current+1}. [${question.technology}] ${question.question}`;
+      fieldset.append(legend);
+      question.options.forEach((option,index)=>{
+        const label=document.createElement('label');
+        const input=document.createElement('input');
+        input.type='radio'; input.name=`q${question.id}`; input.value=String(index); input.checked=answers.get(question.id)===index;
+        input.addEventListener('change',()=>{answers.set(question.id,index); next.disabled=false;});
+        label.append(input,document.createTextNode(` ${option}`));
+        fieldset.append(label);
+      });
+      form.append(fieldset);
+      progress.textContent=`Questão ${current+1} de ${data.questions.length} · ${answers.size}/${data.questions.length} respondidas`;
+      previous.hidden=current===0;
+      next.textContent=current===data.questions.length-1?'Finalizar prova':'Próxima pergunta';
+      next.disabled=!answers.has(question.id);
+    }
+    previous.addEventListener('click',()=>{if(current>0){current--;renderQuestion();}});
+    next.addEventListener('click',async()=>{
+      const question=data.questions[current];
+      if(!answers.has(question.id)){status.textContent='Selecione uma alternativa antes de continuar.';return;}
+      if(current<data.questions.length-1){current++;renderQuestion();return;}
+      if(answers.size!==data.questions.length){status.textContent='Responda todas as questões antes de finalizar.';return;}
+      next.disabled=true; next.textContent='Corrigindo prova…';
+      const result=await api('/api/final-exam/submit',{method:'POST',body:JSON.stringify({answers:data.questions.map(q=>answers.get(q.id))})});
+      if(result.status==='PASSED'){status.innerHTML=`Aprovado com ${result.percentage}%! <a href="certificado.html">Abrir certificado</a>`;panel.hidden=true;return;}
+      status.textContent=`Resultado: ${result.percentage}%. São necessários 80%. Você pode tentar novamente quando estiver preparado.`;
+      panel.hidden=true;
+    });
+    panel.hidden=false;
+    renderQuestion();
+  }catch(e){status.textContent=e.message;}
+}
 loadFinalExam();
 async function loadCertificate(){const status=document.querySelector('#certificate-status');if(!status)return;try{const state=await api('/api/final-exam/status');const c=state.certificate;if(!c){status.textContent='Você ainda não possui um certificado emitido.';return}const validation=`${location.origin}/validar-certificado.html?code=${encodeURIComponent(c.certificate_code)}`;document.querySelector('#certificate-name').textContent=state.user.name;document.querySelector('#certificate-meta').textContent=`Concluído em ${new Date(c.completed_at).toLocaleDateString('pt-BR')} · ${c.training_days} dias de formação · ${c.score_percent}% de aproveitamento`;document.querySelector('#certificate-code').textContent=`Código de validação: ${c.certificate_code}`;document.querySelector('#certificate-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validation)}`;document.querySelector('#validate-certificate').href=validation;document.querySelector('#certificate-document').hidden=false;document.querySelector('#certificate-actions').hidden=false;status.textContent='Certificado emitido e protegido pela sua conta.';document.querySelector('#print-certificate').addEventListener('click',()=>window.print())}catch(e){status.textContent=e.message}}
 loadCertificate();
