@@ -2,8 +2,8 @@ import bcrypt from 'bcryptjs';
 import { finalExamQuestions, publicQuestions } from './exam-catalog.js';
 
 const plans = {
-  BETA: { price: 200, name: 'Plano Beta', description: 'Acesso ao Plano Beta JL Code por 15 dias' },
-  PRO: { price: 250, name: 'Plano Pro', description: 'Acesso ao Plano Pro JL Code por 15 dias' }
+  BETA: { price: 12990, name: 'Plano Beta', description: 'Acesso ao Plano Beta JL Code por 15 dias' },
+  PRO: { price: 19990, name: 'Plano Pro', description: 'Acesso ao Plano Pro JL Code por 15 dias' }
 };
 const INFINITEPAY_CHECKOUT_URL = 'https://api.checkout.infinitepay.io/links';
 const INFINITEPAY_CHECK_URL = 'https://api.checkout.infinitepay.io/payment_check';
