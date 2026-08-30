@@ -81,7 +81,7 @@ if (resendVerification) resendVerification.addEventListener('click', async () =>
 });
 
 let selectedPlan = null;
-const plans = { BETA: { name: 'Plano Beta', price: 200 }, PRO: { name: 'Plano Pro', price: 250 } };
+const plans = { BETA: { name: 'Plano Beta', price: 12990 }, PRO: { name: 'Plano Pro', price: 19990 } };
 function selectPlan(plan) {
   selectedPlan = plan;
   const item = plans[plan];
