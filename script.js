@@ -241,7 +241,7 @@ async function loadApostilas() {
       { code: 'JAVASCRIPT', name: 'JavaScript', plan: 'PRO', description: 'Lógica, DOM, eventos, dados e projetos.' }
     ];
     list.innerHTML = tracks.map((track) => {
-      const lessons = apostilas.filter((apostila) => apostila.course === track.code);
+      const lessons = apostilas.filter((apostila) => String(apostila.course || '').trim().toUpperCase() === track.code);
       const unlocked = lessons.some((apostila) => apostila.allowed);
       const lessonCards = lessons.map((apostila, index) => `<article class="student-course ${apostila.allowed ? '' : 'locked'}"><span class="tag">AULA ${String(index + 1).padStart(2, '0')} · ${apostila.required_plan}</span><h3>${apostila.title}</h3><p>${apostila.description}</p><p>Progresso: ${apostila.progress_percent}%</p>${apostila.allowed ? `<a class="button button-small" href="visualizar-apostila.html?slug=${apostila.slug}">${apostila.progress_percent ? 'Continuar estudando' : 'Abrir apostila'}</a>` : '<p>Disponível no Plano Pro.</p>'}</article>`).join('');
       return `<details class="apostila-track ${unlocked ? '' : 'locked'}"><summary><span class="tag">${track.name.toUpperCase()} · ${track.plan}</span><h2>${track.name}</h2><p>${track.description}</p><strong>${lessons.length} apostilas</strong><span class="button button-small">${unlocked ? 'Ver apostilas' : 'Plano Pro'}</span></summary><div class="apostila-track-content">${unlocked ? `<p class="apostila-track-note">Escolha uma das 50 apostilas de ${track.name} para estudar.</p><div class="student-courses">${lessonCards}</div>` : '<p class="form-feedback error">Este conteúdo é exclusivo do Plano Pro.</p>'}</div></details>`;
