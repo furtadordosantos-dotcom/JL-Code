@@ -107,6 +107,38 @@ async function key(secret) { return crypto.subtle.importKey('raw', new TextEncod
 async function sessionToken(id, secret) { const header=btoa('{"alg":"HS256","typ":"JWT"}').replaceAll('=',''); const body=btoa(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+604800})).replaceAll('=',''); const data=`${header}.${body}`; return `${data}.${b64(await crypto.subtle.sign('HMAC', await key(secret), new TextEncoder().encode(data)))}`; }
 async function session(request, env) { try { const value=cookie(request,'jlcode_session'); if(!value) return null; const [a,b,s]=value.split('.'); if(!a||!b||!s||!(await crypto.subtle.verify('HMAC',await key(env.JWT_SECRET),ub64(s),new TextEncoder().encode(`${a}.${b}`)))) return null; const payload=JSON.parse(new TextDecoder().decode(ub64(b))); return payload.exp > Date.now()/1000 ? Number(payload.sub) : null; } catch { return null; } }
 const lifetimeProEmails = new Set(['julianolucas004@gmail.com']);
+const planTechnologies = (plan) => plan === 'PRO' ? ['HTML','CSS','JAVASCRIPT'] : plan === 'BETA' ? ['HTML'] : [];
+function accessStatements(env, userId, plan) {
+  const enabled = planTechnologies(plan);
+  const disabled = ['HTML','CSS','JAVASCRIPT'].filter((technology) => !enabled.includes(technology));
+  return [
+    ...enabled.map((technology) => env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'ACTIVE') ON CONFLICT(user_id,technology) DO UPDATE SET status='ACTIVE'").bind(userId,technology,technology)),
+    ...disabled.map((technology) => env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'BLOCKED') ON CONFLICT(user_id,technology) DO UPDATE SET status='BLOCKED'").bind(userId,technology,technology))
+  ];
+}
+async function syncScheduledPlan(env, account) {
+  if (!account || lifetimeProEmails.has(String(account.email).toLowerCase())) return account;
+  const active = await env.DB.prepare("SELECT * FROM plan_access_periods WHERE user_id=? AND starts_at<=? AND ends_at>? ORDER BY starts_at DESC LIMIT 1").bind(account.id,now(),now()).first();
+  if (active) {
+    const keepStartedAt = account.plan === active.plan_code && account.payment_status === 'CONFIRMED' && account.plan_started_at;
+    if (account.plan !== active.plan_code || account.payment_status !== 'CONFIRMED' || account.plan_ends_at !== active.ends_at || (!keepStartedAt && account.plan_started_at !== active.starts_at)) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE users SET plan=?, payment_status='CONFIRMED', plan_started_at=?, plan_ends_at=? WHERE id=?").bind(active.plan_code,keepStartedAt ? account.plan_started_at : active.starts_at,active.ends_at,account.id),
+        ...accessStatements(env,account.id,active.plan_code)
+      ]);
+      return env.DB.prepare('SELECT * FROM users WHERE id=?').bind(account.id).first();
+    }
+    return account;
+  }
+  if (account.payment_status==='CONFIRMED'&&account.plan_ends_at&&Date.parse(account.plan_ends_at)<=Date.now()) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET plan='FREE', payment_status='EXPIRED' WHERE id=?").bind(account.id),
+      env.DB.prepare("UPDATE accesses SET status='EXPIRED' WHERE user_id=?").bind(account.id)
+    ]);
+    return env.DB.prepare('SELECT * FROM users WHERE id=?').bind(account.id).first();
+  }
+  return account;
+}
 async function user(env,id) {
   let account=await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(id).first();
   if(!account) return account;
@@ -120,18 +152,11 @@ async function user(env,id) {
     }
     return account;
   }
-  if(account.payment_status==='CONFIRMED'&&account.plan_ends_at&&Date.parse(account.plan_ends_at)<=Date.now()) {
-    await env.DB.batch([
-      env.DB.prepare("UPDATE users SET plan='FREE', payment_status='EXPIRED' WHERE id=?").bind(account.id),
-      env.DB.prepare("UPDATE accesses SET status='EXPIRED' WHERE user_id=?").bind(account.id)
-    ]);
-    account=await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(id).first();
-  }
-  return account;
+  return syncScheduledPlan(env,account);
 }
 function allowed(u) { return u.payment_status === 'CONFIRMED' ? u.plan === 'PRO' ? ['HTML','CSS','JAVASCRIPT'] : u.plan === 'BETA' ? ['HTML'] : [] : []; }
 function isAdmin(u) { return String(u?.email || '').toLowerCase() === 'julianolucas004@gmail.com'; }
-async function finalExamEligibility(env,u) { const started=Date.parse(u.plan_started_at||u.created_at); const payments=(await env.DB.prepare("SELECT COUNT(*) count FROM payments WHERE user_id=? AND status='CONFIRMED'").bind(u.id).first()).count; const eligible=isAdmin(u)||(u.plan==='PRO'&&u.payment_status==='CONFIRMED'&&Date.now()-started>=90*86400000&&payments>=6); const lastFailed=await env.DB.prepare("SELECT created_at FROM final_exam_attempts WHERE user_id=? AND status='FAILED' ORDER BY id DESC LIMIT 1").bind(u.id).first(); const retryAt=!isAdmin(u)&&lastFailed?new Date(Date.parse(lastFailed.created_at)+86400000).toISOString():null; return {eligible,started,payments,daysActive:Math.max(0,Math.floor((Date.now()-started)/86400000)),retryAt,canAttempt:isAdmin(u)||!retryAt||Date.now()>=Date.parse(retryAt)}; }
+async function finalExamEligibility(env,u) { const started=Date.parse(u.plan_started_at||u.created_at); const payments=(await env.DB.prepare("SELECT COUNT(*) count FROM payments WHERE user_id=? AND plan_code='PRO' AND status='CONFIRMED'").bind(u.id).first()).count; const eligible=isAdmin(u)||(u.plan==='PRO'&&u.payment_status==='CONFIRMED'&&Date.now()-started>=90*86400000&&payments>=6); const lastFailed=await env.DB.prepare("SELECT created_at FROM final_exam_attempts WHERE user_id=? AND status='FAILED' ORDER BY id DESC LIMIT 1").bind(u.id).first(); const retryAt=!isAdmin(u)&&lastFailed?new Date(Date.parse(lastFailed.created_at)+86400000).toISOString():null; return {eligible,started,payments,daysActive:Math.max(0,Math.floor((Date.now()-started)/86400000)),retryAt,canAttempt:isAdmin(u)||!retryAt||Date.now()>=Date.parse(retryAt)}; }
 function publicUser(u) { return { id:u.id,name:u.name,email:u.email,plan:u.plan,paymentStatus:u.payment_status,allowedTechnologies:allowed(u),planStartedAt:u.plan_started_at,planEndsAt:u.plan_ends_at,isAdmin:isAdmin(u) }; }
 async function mail(env,to,subject,html) { if(!env.BREVO_API_KEY || !env.EMAIL_FROM) throw Error('O envio de e-mail não está configurado.'); const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':env.BREVO_API_KEY,'content-type':'application/json','accept':'application/json'},body:JSON.stringify({sender:{name:'JL Code',email:env.EMAIL_FROM},to:[{email:to}],subject,htmlContent:html})}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.message || data.code || 'O Brevo recusou o envio.'); }
 async function requireUser(context) { const id=await session(context.request,context.env); if(!id) return null; return user(context.env,id); }
@@ -169,18 +194,21 @@ async function activateInfinitePayOrder(env, order, payment) {
   const accessDays=Number(order.access_days)||PLAN_PERIOD_DAYS;
   const currentEnd=Date.parse(account?.plan_ends_at||'');
   const hasActiveAccess=Number.isFinite(currentEnd)&&currentEnd>Date.now();
-  const start=hasActiveAccess&&account?.plan==='PRO'&&order.plan_code==='PRO' ? (account.plan_started_at||now()) : now();
-  const end=new Date((hasActiveAccess?currentEnd:Date.now())+accessDays*24*60*60*1000).toISOString();
-  const technologies=order.plan_code==='PRO'?['HTML','CSS','JAVASCRIPT']:['HTML'];
+  if (hasActiveAccess) {
+    await env.DB.prepare("INSERT INTO plan_access_periods (user_id,plan_code,starts_at,ends_at) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM plan_access_periods WHERE user_id=?)")
+      .bind(account.id,account.plan,account.plan_started_at||now(),account.plan_ends_at,account.id).run();
+  }
+  const queued = await env.DB.prepare("SELECT ends_at FROM plan_access_periods WHERE user_id=? AND ends_at>? ORDER BY ends_at DESC LIMIT 1").bind(account.id,now()).first();
+  const start=new Date(queued?.ends_at||Date.now()).toISOString();
+  const end=new Date(Date.parse(start)+accessDays*24*60*60*1000).toISOString();
   const paid=await env.DB.prepare("UPDATE payment_orders SET status='PAID', transaction_nsu=?, invoice_slug=COALESCE(invoice_slug,?), receipt_url=?, capture_method=?, confirmed_at=?, expires_at=? WHERE id=? AND status='PENDING'")
     .bind(String(payment.transaction_nsu||order.transaction_nsu||''),String(payment.slug||payment.invoice_slug||order.invoice_slug||'')||null,String(payment.receipt_url||order.receipt_url||'')||null,String(payment.capture_method||order.capture_method||'')||null,now(),end,order.id).run();
   if(!paid.meta.changes) return env.DB.prepare('SELECT * FROM payment_orders WHERE id=?').bind(order.id).first();
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO payments (user_id,plan_code,amount_cents,periods,access_days,method,status,transaction_id) VALUES (?,?,?,?,?,?,?,?)").bind(order.user_id,order.plan_code,order.amount_cents,periods,accessDays,method,'CONFIRMED',String(payment.transaction_nsu||order.order_nsu)),
-    env.DB.prepare("UPDATE users SET plan=?, payment_status='CONFIRMED', plan_started_at=?, plan_ends_at=? WHERE id=?").bind(order.plan_code,start,end,order.user_id),
-    ...technologies.map(t=>env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'ACTIVE') ON CONFLICT(user_id,technology) DO UPDATE SET status='ACTIVE'").bind(order.user_id,t,t)),
-    ...(order.plan_code==='BETA' ? ['CSS','JAVASCRIPT'].map(t=>env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'BLOCKED') ON CONFLICT(user_id,technology) DO UPDATE SET status='BLOCKED'").bind(order.user_id,t,t)) : [])
+    env.DB.prepare("INSERT OR IGNORE INTO plan_access_periods (user_id,payment_order_id,plan_code,starts_at,ends_at) VALUES (?,?,?,?,?)").bind(order.user_id,order.id,order.plan_code,start,end)
   ]);
+  await syncScheduledPlan(env,await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(order.user_id).first());
   return env.DB.prepare('SELECT * FROM payment_orders WHERE id=?').bind(order.id).first();
 }
 async function verifyInfinitePayOrder(env, order, details) {
