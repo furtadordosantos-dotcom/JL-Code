@@ -223,7 +223,39 @@ async function loadPublicCertificate(){const status=document.querySelector('#pub
 loadPublicCertificate();
 
 async function loadStudent() { const greeting = document.querySelector('#student-greeting'); if (!greeting) return; try { const { user, accesses } = await api('/api/student'); greeting.textContent = `Olá, ${user.name.split(' ')[0]}!`; document.querySelector('#student-plan').textContent = user.plan === 'FREE' ? 'Sem plano' : `Plano ${user.plan === 'BETA' ? 'Beta' : 'Pro'}`; document.querySelector('#student-status').textContent = user.paymentStatus === 'CONFIRMED' ? 'Acesso liberado' : 'Aguardando pagamento'; const active = new Set(accesses.filter((a) => a.status === 'ACTIVE').map((a) => a.technology)); const container = document.querySelector('#student-courses'); container.innerHTML = ['HTML', 'CSS', 'JAVASCRIPT'].map((technology) => { const unlocked = active.has(technology); return `<article class="student-course ${unlocked ? '' : 'locked'}"><div class="course-icon">${unlocked ? '✓' : '🔒'}</div><h3>${technology === 'JAVASCRIPT' ? 'JavaScript' : technology}</h3><p>${unlocked ? 'Aulas, apostilas, exercícios e projetos disponíveis.' : technology === 'HTML' ? 'Assine um plano para liberar este curso.' : 'Disponível no Plano Pro.'}</p></article>`; }).join(''); } catch { location.href = 'login.html'; } }
+function showStudentAccessTime(user) {
+  const target = document.querySelector('#student-access-time');
+  if (!target) return;
+  if (user.plan === 'FREE' || user.paymentStatus !== 'CONFIRMED' || !user.planEndsAt) {
+    target.textContent = 'Sem acesso ativo';
+    return;
+  }
+  const endsAt = new Date(user.planEndsAt);
+  if (Number.isNaN(endsAt.getTime()) || endsAt.getTime() <= Date.now()) {
+    target.textContent = 'Acesso encerrado';
+    return;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiryDay = new Date(endsAt);
+  expiryDay.setHours(0, 0, 0, 0);
+  const days = Math.max(0, Math.round((expiryDay - today) / 86400000));
+  target.textContent = days === 0 ? 'Expira hoje' : `${days} ${days === 1 ? 'dia restante' : 'dias restantes'}`;
+}
+
+async function loadStudentAccessTime() {
+  const target = document.querySelector('#student-access-time');
+  if (!target) return;
+  try {
+    const { user } = await api('/api/student');
+    showStudentAccessTime(user);
+  } catch {
+    target.textContent = '—';
+  }
+}
+
 loadStudent();
+loadStudentAccessTime();
 function addCertificationShortcut(){const resources=document.querySelector('.student-resources>div');if(!resources||document.querySelector('#certification-resource'))return;const card=document.createElement('article');card.id='certification-resource';card.innerHTML='★<h3><a href="prova-final.html">Prova e certificado</a></h3><p>Conquiste sua certificação ao concluir a trilha Pro.</p>';resources.append(card);const nav=document.querySelector('.nav-links');if(nav){const link=document.createElement('a');link.href='prova-final.html';link.textContent='Prova final';nav.insertBefore(link,nav.querySelector('#logout-link')||null)}}
 addCertificationShortcut();
 
