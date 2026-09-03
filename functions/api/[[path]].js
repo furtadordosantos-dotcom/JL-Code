@@ -7,7 +7,16 @@ const plans = {
 };
 const INFINITEPAY_CHECKOUT_URL = 'https://api.checkout.infinitepay.io/links';
 const INFINITEPAY_CHECK_URL = 'https://api.checkout.infinitepay.io/payment_check';
-const PLAN_DURATION_MS = 15 * 24 * 60 * 60 * 1000;
+const PLAN_PERIOD_DAYS = 15;
+const PLAN_DURATION_MS = PLAN_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+function subscriptionTerms(planCode, periods) {
+  const quantity = Number(periods);
+  if (!plans[planCode] || !Number.isSafeInteger(quantity) || quantity < 1) throw Error('Quantidade de períodos inválida.');
+  const amountCents = plans[planCode].price * quantity;
+  const accessDays = PLAN_PERIOD_DAYS * quantity;
+  if (!Number.isSafeInteger(amountCents) || !Number.isSafeInteger(accessDays)) throw Error('Quantidade de períodos inválida.');
+  return { periods: quantity, accessDays, amountCents };
+}
 const exerciseCatalog = [
   {id:'html-title',technology:'HTML',requiredPlan:'BETA',level:'Básico',title:'Meu primeiro título',description:'Aprenda a criar uma página com título e parágrafo.',goal:'Crie um h1 com seu nome e um p contando o que você quer aprender.',starterCode:'<h1>Olá, eu sou ...</h1>\n<p>Quero aprender programação.</p>'},
   {id:'html-links',technology:'HTML',requiredPlan:'BETA',level:'Básico',title:'Links e imagens',description:'Use uma imagem e um link de forma acessível.',goal:'Adicione uma imagem com alt e um link para um site que você gosta.',starterCode:'<h1>Meu site favorito</h1>\n<img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=500&q=80" alt="Pessoa usando um notebook">\n<p><a href="https://developer.mozilla.org/pt-BR/">Aprender na MDN</a></p>'},
@@ -155,13 +164,19 @@ async function activateInfinitePayOrder(env, order, payment) {
   if(order.status==='PAID') return order;
   if(!payment?.success||payment.paid!==true||Number(payment.amount)!==Number(order.amount_cents)) throw Error('A InfinitePay ainda não confirmou este pagamento com o valor correto.');
   const method=String(payment.capture_method||'').toLowerCase()==='credit_card'?'CARD':'PIX';
-  const start=now(), end=new Date(Date.now()+PLAN_DURATION_MS).toISOString();
+  const account=await user(env,order.user_id);
+  const periods=Number(order.periods)||1;
+  const accessDays=Number(order.access_days)||PLAN_PERIOD_DAYS;
+  const currentEnd=Date.parse(account?.plan_ends_at||'');
+  const hasActiveAccess=Number.isFinite(currentEnd)&&currentEnd>Date.now();
+  const start=hasActiveAccess&&account?.plan==='PRO'&&order.plan_code==='PRO' ? (account.plan_started_at||now()) : now();
+  const end=new Date((hasActiveAccess?currentEnd:Date.now())+accessDays*24*60*60*1000).toISOString();
   const technologies=order.plan_code==='PRO'?['HTML','CSS','JAVASCRIPT']:['HTML'];
   const paid=await env.DB.prepare("UPDATE payment_orders SET status='PAID', transaction_nsu=?, invoice_slug=COALESCE(invoice_slug,?), receipt_url=?, capture_method=?, confirmed_at=?, expires_at=? WHERE id=? AND status='PENDING'")
     .bind(String(payment.transaction_nsu||order.transaction_nsu||''),String(payment.slug||payment.invoice_slug||order.invoice_slug||'')||null,String(payment.receipt_url||order.receipt_url||'')||null,String(payment.capture_method||order.capture_method||'')||null,now(),end,order.id).run();
   if(!paid.meta.changes) return env.DB.prepare('SELECT * FROM payment_orders WHERE id=?').bind(order.id).first();
   await env.DB.batch([
-    env.DB.prepare("INSERT OR IGNORE INTO payments (user_id,plan_code,amount_cents,method,status,transaction_id) VALUES (?,?,?,?,?,?)").bind(order.user_id,order.plan_code,order.amount_cents,method,'CONFIRMED',String(payment.transaction_nsu||order.order_nsu)),
+    env.DB.prepare("INSERT OR IGNORE INTO payments (user_id,plan_code,amount_cents,periods,access_days,method,status,transaction_id) VALUES (?,?,?,?,?,?,?,?)").bind(order.user_id,order.plan_code,order.amount_cents,periods,accessDays,method,'CONFIRMED',String(payment.transaction_nsu||order.order_nsu)),
     env.DB.prepare("UPDATE users SET plan=?, payment_status='CONFIRMED', plan_started_at=?, plan_ends_at=? WHERE id=?").bind(order.plan_code,start,end,order.user_id),
     ...technologies.map(t=>env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'ACTIVE') ON CONFLICT(user_id,technology) DO UPDATE SET status='ACTIVE'").bind(order.user_id,t,t)),
     ...(order.plan_code==='BETA' ? ['CSS','JAVASCRIPT'].map(t=>env.DB.prepare("INSERT INTO accesses (user_id,course,technology,status) VALUES (?,?,?,'BLOCKED') ON CONFLICT(user_id,technology) DO UPDATE SET status='BLOCKED'").bind(order.user_id,t,t)) : [])
@@ -211,10 +226,12 @@ export async function onRequest(context) {
       const plan=String(body.plan||'').toUpperCase();
       const paymentMethod=String(body.paymentMethod||'').toUpperCase();
       if(!plans[plan]) return json({error:'Plano inválido.'},400);
+      let terms;
+      try { terms=subscriptionTerms(plan,body.periods); } catch(error) { return json({error:error.message},400); }
       if(paymentMethod && !['PIX','CARD'].includes(paymentMethod)) return json({error:'Forma de pagamento inválida.'},400);
       if(!infinitePayConfigured(env)) return json({error:'O checkout da InfinitePay ainda não foi configurado.'},503);
       const origin=apiOrigin(env,url), orderNsu=`JL-${crypto.randomUUID()}`;
-      await env.DB.prepare('INSERT INTO payment_orders (user_id,plan_code,amount_cents,order_nsu) VALUES (?,?,?,?)').bind(u.id,plan,plans[plan].price,orderNsu).run();
+      await env.DB.prepare('INSERT INTO payment_orders (user_id,plan_code,amount_cents,periods,access_days,order_nsu) VALUES (?,?,?,?,?,?)').bind(u.id,plan,terms.amountCents,terms.periods,terms.accessDays,orderNsu).run();
       try {
         const checkout=await infinitePayRequest(INFINITEPAY_CHECKOUT_URL,{
           handle:env.INFINITEPAY_HANDLE,
@@ -222,11 +239,11 @@ export async function onRequest(context) {
           redirect_url:`${origin}/pagamento-aprovado.html?order_nsu=${encodeURIComponent(orderNsu)}`,
           webhook_url:`${origin}/api/payments/infinitepay/webhook`,
           customer:{name:u.name,email:u.email},
-          items:[{quantity:1,price:plans[plan].price,description:plans[plan].description}]
+          items:[{quantity:terms.periods,price:plans[plan].price,description:`${plans[plan].description} — ${terms.accessDays} dias`}]
         });
         if(!checkout.url) throw Error('A InfinitePay não retornou o link de checkout.');
         await env.DB.prepare('UPDATE payment_orders SET checkout_url=?, invoice_slug=? WHERE order_nsu=?').bind(checkout.url,checkout.invoice_slug||checkout.slug||null,orderNsu).run();
-        return json({checkoutUrl:checkout.url,orderNsu,plan,amountCents:plans[plan].price},201);
+        return json({checkoutUrl:checkout.url,orderNsu,plan,periods:terms.periods,accessDays:terms.accessDays,amountCents:terms.amountCents},201);
       } catch(error) {
         await env.DB.prepare("UPDATE payment_orders SET status='FAILED' WHERE order_nsu=? AND status='PENDING'").bind(orderNsu).run();
         throw error;
@@ -235,7 +252,7 @@ export async function onRequest(context) {
     if(method==='GET'&&path.join('/')==='payments/infinitepay/status') {
       const u=await auth(); if(u instanceof Response)return u;
       const orderNsu=String(url.searchParams.get('order_nsu')||'');
-      const order=await env.DB.prepare('SELECT order_nsu,plan_code,amount_cents,status,receipt_url,expires_at FROM payment_orders WHERE order_nsu=? AND user_id=?').bind(orderNsu,u.id).first();
+      const order=await env.DB.prepare('SELECT order_nsu,plan_code,amount_cents,periods,access_days,status,receipt_url,expires_at FROM payment_orders WHERE order_nsu=? AND user_id=?').bind(orderNsu,u.id).first();
       if(!order)return json({error:'Pedido não encontrado.'},404);
       return json({order});
     }
@@ -254,7 +271,7 @@ export async function onRequest(context) {
         const confirmed=await verifyInfinitePayOrder(env,order,body);
         if(confirmed.status!=='PAID') return json({success:false,message:'Pagamento ainda não confirmado.'},400);
         const account=await user(env,order.user_id);
-        mail(env,account.email,`Pagamento confirmado — ${plans[order.plan_code].name} JL Code`,emailLayout(`<p>Olá, ${escapeHtml(account.name)}.</p><p>Seu pagamento foi confirmado. O ${plans[order.plan_code].name} está ativo por 15 dias.</p><p style="text-align:center;margin:28px 0"><a href="${apiOrigin(env,url)}/aluno.html" style="display:inline-block;background:#2687ff;color:#ffffff;text-decoration:none;border-radius:9px;padding:13px 22px;font-weight:700">ACESSAR ÁREA DO ALUNO</a></p>`)).catch(console.error);
+        mail(env,account.email,`Pagamento confirmado — ${plans[order.plan_code].name} JL Code`,emailLayout(`<p>Olá, ${escapeHtml(account.name)}.</p><p>Seu pagamento foi confirmado. O ${plans[order.plan_code].name} está ativo por ${Number(confirmed.access_days)||PLAN_PERIOD_DAYS} dias.</p><p style="text-align:center;margin:28px 0"><a href="${apiOrigin(env,url)}/aluno.html" style="display:inline-block;background:#2687ff;color:#ffffff;text-decoration:none;border-radius:9px;padding:13px 22px;font-weight:700">ACESSAR ÁREA DO ALUNO</a></p>`)).catch(console.error);
         return json({success:true,message:null});
       } catch(error) { return json({success:false,message:error.message||'Não foi possível confirmar o pagamento.'},400); }
     }
