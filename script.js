@@ -82,18 +82,15 @@ if (resendVerification) resendVerification.addEventListener('click', async () =>
 
 let selectedPlan = null;
 const plans = { BETA: { name: 'Plano Beta', price: 12990 }, PRO: { name: 'Plano Pro', price: 19990 } };
-function selectPlan(plan) {
-  selectedPlan = plan;
-  const item = plans[plan];
-  const planLabel = document.querySelector('#checkout-plan');
-  const valueLabel = document.querySelector('#checkout-value');
-  if (planLabel) planLabel.textContent = item.name;
-  if (valueLabel) valueLabel.textContent = money(item.price);
-  const message = document.querySelector('#payment-message');
-  if (message) message.textContent = `${item.name} selecionado. Você poderá escolher Pix ou cartão no checkout seguro.`;
-  document.querySelector('#pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+const planPeriods = { BETA: 1, PRO: 1 };
+const accessText = (days) => { const months = Math.floor(days / 30), remaining = days % 30; return !months ? `${days} dias` : `${days} dias — ${months} ${months === 1 ? 'mês' : 'meses'}${remaining ? ` e ${remaining} dias` : ''}`; };
+function planTerms(plan) { const periods = planPeriods[plan], accessDays = periods * 15, amountCents = plans[plan].price * periods; return { periods, accessDays, amountCents }; }
+function updateCheckoutSummary() { if (!selectedPlan) return; const item = plans[selectedPlan], terms = planTerms(selectedPlan), planLabel = document.querySelector('#checkout-plan'), accessLabel = document.querySelector('#checkout-access'), valueLabel = document.querySelector('#checkout-value'); if (planLabel) planLabel.textContent = `${item.name} · ${terms.periods} ${terms.periods === 1 ? 'período' : 'períodos'}`; if (accessLabel) accessLabel.textContent = accessText(terms.accessDays); if (valueLabel) valueLabel.textContent = money(terms.amountCents); }
+function renderPlanTerms(plan) { const terms = planTerms(plan), periodsLabel = document.querySelector(`[data-plan-periods="${plan}"]`), priceLabel = document.querySelector(`[data-plan-price="${plan}"]`), accessLabel = document.querySelector(`[data-plan-access="${plan}"]`), summaryLabel = document.querySelector(`[data-plan-summary="${plan}"]`), decrease = document.querySelector(`[data-period-change="-1"][data-plan="${plan}"]`); if (periodsLabel) periodsLabel.textContent = terms.periods; if (priceLabel) priceLabel.textContent = money(terms.amountCents); if (accessLabel) accessLabel.textContent = `${accessText(terms.accessDays)} de acesso`; if (summaryLabel) summaryLabel.textContent = `${accessText(terms.accessDays)} de acesso · Total ${money(terms.amountCents)}`; if (decrease) decrease.disabled = terms.periods === 1; if (selectedPlan === plan) updateCheckoutSummary(); }
+function selectPlan(plan) { selectedPlan = plan; const item = plans[plan], terms = planTerms(plan); updateCheckoutSummary(); const message = document.querySelector('#payment-message'); if (message) message.textContent = `${item.name} selecionado para ${accessText(terms.accessDays)}. Você poderá escolher Pix ou cartão no checkout seguro.`; document.querySelector('#pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 document.querySelectorAll('.select-plan').forEach((button) => button.addEventListener('click', () => selectPlan(button.dataset.plan)));
+document.querySelectorAll('[data-period-change]').forEach((button) => button.addEventListener('click', () => { const plan = button.dataset.plan, change = Number(button.dataset.periodChange); planPeriods[plan] = Math.max(1, planPeriods[plan] + change); renderPlanTerms(plan); }));
+Object.keys(plans).forEach(renderPlanTerms);
 async function startInfinitePayCheckout(paymentMethod, button) {
   const notice = document.querySelector('#payment-notice');
   if (!selectedPlan) { notice.textContent = 'Escolha um plano antes de continuar.'; notice.className = 'payment-notice error'; return; }
@@ -102,7 +99,7 @@ async function startInfinitePayCheckout(paymentMethod, button) {
   const label = paymentMethod === 'PIX' ? 'Pix' : 'cartão';
   notice.textContent = `Criando checkout seguro para pagamento com ${label}…`; notice.className = 'payment-notice';
   try {
-    const result = await api('/api/payments/infinitepay/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlan, paymentMethod }) });
+    const result = await api('/api/payments/infinitepay/checkout', { method: 'POST', body: JSON.stringify({ plan: selectedPlan, periods: planPeriods[selectedPlan], paymentMethod }) });
     location.assign(result.checkoutUrl);
   } catch (error) {
     notice.textContent = error.message.includes('login') ? 'Faça login ou crie uma conta antes de assinar.' : error.message;
@@ -125,7 +122,7 @@ async function loadPaymentResult() {
       await api('/api/payments/infinitepay/verify-return', { method: 'POST', body: JSON.stringify({ order_nsu: orderNsu, transaction_nsu: params.get('transaction_nsu'), slug: params.get('slug') || params.get('invoice_slug'), receipt_url: params.get('receipt_url') || '' }) });
     }
     const { order } = await api(`/api/payments/infinitepay/status?order_nsu=${encodeURIComponent(orderNsu)}`);
-    if (order.status === 'PAID') { title.textContent = 'Pagamento confirmado!'; message.textContent = `Seu Plano ${order.plan_code === 'BETA' ? 'Beta' : 'Pro'} foi liberado por 15 dias.`; feedback.textContent = 'Seu acesso já está disponível.'; feedback.className = 'form-feedback success'; action.hidden = false; return; }
+    if (order.status === 'PAID') { title.textContent = 'Pagamento confirmado!'; message.textContent = `Seu Plano ${order.plan_code === 'BETA' ? 'Beta' : 'Pro'} foi liberado por ${accessText(Number(order.access_days) || 15)}.`; feedback.textContent = 'Seu acesso já está disponível.'; feedback.className = 'form-feedback success'; action.hidden = false; return; }
     title.textContent = 'Aguardando confirmação'; message.textContent = 'A InfinitePay ainda está confirmando o pagamento. Atualize esta página em instantes; o acesso será liberado automaticamente após a confirmação.';
   } catch (error) { title.textContent = 'Não foi possível confirmar agora'; message.textContent = error.message; }
 }
